@@ -1,0 +1,441 @@
+<title>Del ticket al PR draft</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: mapa de un grafo único y fijo; cada wf enciende su recorrido sobre los mismos nodos. */
+:root {
+  --bg: #F1F4F7; --surface: #FFFFFF; --ink: #16232E; --muted: #566773; --line: #C6D1D9; --edge: #8C9CA8;
+  --accent: #2450C9; --on-accent: #FFFFFF;
+  --agent: #E7EDFC; --agent-line: #2450C9;
+  --code: #E8EDF1; --code-line: #566773;
+  --human: #FFF0D4; --human-line: #A85F00;
+  --doc: #DFF3EF; --doc-line: #0B7A6E;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10171D; --surface: #18222B; --ink: #E6EDF2; --muted: #9BACB8; --line: #33434F; --edge: #6D7F8C;
+  --accent: #8AA9FF; --on-accent: #10171D;
+  --agent: #1B2A55; --agent-line: #8AA9FF;
+  --code: #24303A; --code-line: #9BACB8;
+  --human: #3A2B12; --human-line: #F0B45A;
+  --doc: #123430; --doc-line: #57CDBE;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #10171D; --surface: #18222B; --ink: #E6EDF2; --muted: #9BACB8; --line: #33434F; --edge: #6D7F8C;
+  --accent: #8AA9FF; --on-accent: #10171D;
+  --agent: #1B2A55; --agent-line: #8AA9FF;
+  --code: #24303A; --code-line: #9BACB8;
+  --human: #3A2B12; --human-line: #F0B45A;
+  --doc: #123430; --doc-line: #57CDBE;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 15px/1.55 var(--body); }
+.page {
+  max-width: 1160px; margin: 0 auto; display: grid; gap: 32px; padding-block: 36px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page > * { min-width: 0; }
+h1, h2 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 4.2vw, 40px); line-height: 1.1; }
+h2 { font-size: 21px; line-height: 1.2; }
+p { margin: 0; }
+.lead { max-width: 68ch; margin-top: 10px; color: var(--muted); font-size: 16px; }
+.note { max-width: 72ch; color: var(--muted); font-size: 14px; }
+.section { display: grid; gap: 14px; }
+.section > * { min-width: 0; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tab {
+  font: 500 14px/1 var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 10px 14px; cursor: pointer;
+}
+.tab:hover { border-color: var(--accent); }
+.tab[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 22px; height: 13px; border: 1.5px solid; flex: none; }
+.sw.agent { background: var(--agent); border-color: var(--agent-line); border-radius: 4px; }
+.sw.code { background: var(--code); border-color: var(--code-line); border-radius: 0; }
+.sw.human { background: var(--human); border-color: var(--human-line); border-radius: 7px; }
+.sw.doc { background: var(--doc); border-color: var(--doc-line); border-style: dashed; border-radius: 0; }
+.sw.back { border: 0; border-top: 2px dashed var(--edge); height: 0; }
+
+.graph { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.graph svg { display: block; width: 100%; min-width: 900px; height: auto; }
+.hint { display: none; font-size: 13px; color: var(--muted); }
+@media (max-width: 900px) { .hint { display: block; } }
+
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+.edge.back { stroke-dasharray: 5 4; }
+.edge.on { stroke: var(--accent); stroke-width: 2.6; }
+.edge.off { opacity: .22; }
+.mk { fill: var(--edge); }
+.mkOn { fill: var(--accent); }
+.elabel { font: 500 10.5px var(--mono); fill: var(--muted); text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+.elabel.on { fill: var(--accent); }
+.elabel.off { opacity: .25; }
+.node rect.box { stroke-width: 1.5; }
+.node.agent rect.box { fill: var(--agent); stroke: var(--agent-line); }
+.node.code rect.box { fill: var(--code); stroke: var(--code-line); }
+.node.human rect.box { fill: var(--human); stroke: var(--human-line); }
+.node.doc rect.box { fill: var(--doc); stroke: var(--doc-line); stroke-dasharray: 5 3; }
+.node.off { opacity: .28; }
+.node.on rect.box { stroke-width: 2.6; }
+.ntitle { font: 600 13px var(--body); fill: var(--ink); text-anchor: middle; }
+.nsub { font: 400 10px var(--mono); fill: var(--muted); text-anchor: middle; }
+.badge rect { fill: var(--accent); }
+.badge text { font: 500 11px var(--mono); fill: var(--on-accent); text-anchor: middle; }
+.layer rect { fill: var(--bg); stroke: var(--line); }
+.layer .lt { font: 600 13px var(--body); fill: var(--ink); }
+.layer .ls { font: 400 11.5px var(--mono); fill: var(--muted); }
+
+.panel { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
+.panel > * { min-width: 0; }
+@media (max-width: 760px) { .panel { grid-template-columns: minmax(0, 1fr); } }
+.panel h2 { margin-bottom: 10px; }
+.quote { font: 400 13.5px/1.5 var(--mono); background: var(--bg); border-radius: 4px; padding: 10px 12px; margin-bottom: 14px; }
+.tag { font: 500 11.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.axes { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 14px; margin: 0 0 14px; font-size: 14px; }
+.axes dt { color: var(--muted); }
+.axes dd { margin: 0; font-weight: 500; }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; counter-increment: s; font-size: 14px; }
+.steps li::before { content: counter(s); font: 500 12px/21px var(--mono); color: var(--accent); text-align: right; }
+.steps b { font-weight: 600; }
+
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td code { font: 400 12.5px var(--mono); }
+.routes { min-width: 620px; }
+.catalog { min-width: 820px; }
+.group td { background: var(--bg); font: 500 11.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .node, .edge, .elabel { transition: opacity .18s ease; }
+}
+</style>
+
+<div class="page">
+  <header>
+    <h1>Del ticket al PR draft</h1>
+    <p class="lead">Cada tarea sigue el camino que necesita según su tamaño y alcance. Un fix pequeño va directo al cambio, y una feature nueva pasa antes por especificación y aprobación. Así no se gasta esfuerzo en etapas que no aportan, y cada tarea recibe el nivel de control que le corresponde.</p>  </header>
+
+  <section class="section">
+    <div class="tabs" id="tabs"></div>
+    <div class="legend">
+      <span><i class="sw agent"></i>Agente (usa el modelo)</span>
+      <span><i class="sw code"></i>Código determinista</span>
+      <span><i class="sw human"></i>Decisión humana</span>
+      <span><i class="sw doc"></i>Artefacto</span>
+      <span><i class="sw back"></i>Vuelta atrás</span>
+    </div>
+    <p class="hint">Desliza el diagrama en horizontal para verlo entero.</p>
+    <div class="graph"><svg id="g" viewBox="0 0 1090 650" role="img" aria-label="Grafo de componentes del sistema, con el recorrido del workflow seleccionado resaltado"></svg></div>
+    <div class="panel" id="panel"></div>
+  </section>
+
+  <section class="section">
+    <h2>Cómo elige ruta el router</h2>
+    <div class="tablewrap"><table class="routes">
+      <thead><tr><th>Campos del intent</th><th>Recorrido</th><th>Termina en</th></tr></thead>
+      <tbody>
+        <tr><td>PR · trivial</td><td>Implementar → verificar → publicar</td><td>PR draft</td></tr>
+        <tr><td>PR · acotado</td><td>Planificar → implementar → verificar → revisar → publicar</td><td>PR draft</td></tr>
+        <tr><td>PR · amplio o riesgo alto</td><td>Spec → aprobación → planificar → implementar → verificar → revisar → publicar</td><td>PR draft</td></tr>
+        <tr><td>Investigación o propuesta</td><td>Investigar → redactar</td><td>Informe o propuesta</td></tr>
+        <tr><td>POC</td><td>Implementar en rama desechable → redactar</td><td>Rama e informe de conclusiones</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="section">
+    <h2>Componentes</h2>
+    <p class="note">Los patrones siguen la guía "Building Effective Agents" de Anthropic. Hay dos excepciones: Normalizer viene de Enterprise Integration Patterns, de Hohpe y Woolf, y Planning es habitual en otras listas de patrones agénticos.</p>
+    <div class="tablewrap"><table class="catalog">
+      <thead><tr><th>Componente</th><th>Qué hace</th><th>Patrón</th><th>Límite</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="4">Entrada y clasificación</td></tr>
+        <tr><td>Adaptador</td><td>Convierte un ticket o un prompt al mismo formato, con la petición y sus metadatos.</td><td>Normalizer (EIP)</td><td>Trata el contenido como datos, nunca como instrucciones.</td></tr>
+        <tr><td>Analista</td><td>Lee la petición, investiga el código y clasifica entrega, claridad, alcance y riesgo.</td><td>Routing: clasificación</td><td>Solo lectura.</td></tr>
+        <tr><td>Aclarador</td><td>Pregunta en Jira o en el chat solo las dudas bloqueantes y pausa la tarea.</td><td>Human-in-the-loop</td><td>Máximo de rondas de preguntas.</td></tr>
+        <tr><td>Router</td><td>Lee los campos del <code>intent.md</code> y aplica la tabla de rutas.</td><td>Routing: decisión de ruta</td><td>Sin modelo: mismas entradas, misma ruta.</td></tr>
+        <tr class="group"><td colspan="4">Definición</td></tr>
+        <tr><td>Especificador</td><td>Genera <code>spec.md</code> aplicando las políticas del equipo como skills.</td><td>Prompt chaining</td><td>No toca código.</td></tr>
+        <tr><td>Aprobación</td><td>Una persona acepta, corrige o rechaza la spec.</td><td>Human-in-the-loop</td><td>Sin aprobación, la tarea no avanza.</td></tr>
+        <tr><td>Planificador</td><td>Genera <code>plan.md</code> con pasos, ficheros afectados y forma de verificar.</td><td>Planning</td><td>Solo lectura.</td></tr>
+        <tr class="group"><td colspan="4">Construcción y control</td></tr>
+        <tr><td>Implementador</td><td>Escribe el cambio y reparte en workers lo que sea independiente.</td><td>Orchestrator-workers</td><td>Worktree propio, sin push a ramas protegidas.</td></tr>
+        <tr><td>Verificador</td><td>Ejecuta build y tests, comprueba los criterios de aceptación e informa.</td><td>Evaluator-optimizer</td><td>No corrige ni edita las pruebas de aceptación.</td></tr>
+        <tr><td>Revisor</td><td>Revisa el diff por pasadas: errores, seguridad y convenciones.</td><td>Parallelization</td><td>Puede devolver el cambio, no aprobarlo.</td></tr>
+        <tr><td>Publicador</td><td>Crea el PR en draft con el intent, los supuestos y las evidencias.</td><td>Ninguno: paso determinista</td><td>Solo draft, sin merge ni despliegue.</td></tr>
+        <tr class="group"><td colspan="4">Conocimiento</td></tr>
+        <tr><td>Investigador</td><td>Analiza código, datos y documentación para responder la pregunta del intent.</td><td>Agente autónomo</td><td>Solo lectura.</td></tr>
+        <tr><td>Redactor</td><td>Convierte hallazgos o el resultado de un POC en un informe o una propuesta.</td><td>Prompt chaining</td><td>Separa hechos de hipótesis y puede proponer un nuevo intent.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</div>
+
+<script>
+const W = 122, H = 54;
+const C = [28, 196, 346, 496, 646, 796, 946];
+const N = {
+  entrada:   [C[0], 16,  "code",  "Entrada", "Jira · prompt"],
+  adaptador: [C[0], 100, "code",  "Adaptador", "formato común"],
+  analista:  [C[0], 190, "agent", "Analista", "clasifica 4 ejes"],
+  aclarador: [C[1], 190, "agent", "Aclarador", "pregunta y pausa"],
+  intent:    [C[0], 280, "doc",   "intent.md", "contrato común"],
+  router:    [C[0], 370, "code",  "Router", "aplica reglas"],
+  spec:      [C[1], 370, "agent", "Especificador", "genera spec.md"],
+  aprob:     [C[2], 370, "human", "Aprobación", "valida la spec"],
+  plan:      [C[3], 370, "agent", "Planificador", "genera plan.md"],
+  impl:      [C[4], 370, "agent", "Implementador", "orquesta workers"],
+  ver:       [C[5], 370, "agent", "Verificador", "solo informa"],
+  rev:       [C[6], 370, "agent", "Revisor", "por pasadas"],
+  inv:       [C[1], 480, "agent", "Investigador", "código y datos"],
+  red:       [C[3], 480, "agent", "Redactor", "resume hallazgos"],
+  pub:       [C[6], 480, "code",  "Publicador", "crea el PR"],
+  inf:       [C[3], 580, "doc",   "Informe", "propuesta o POC"],
+  pr:        [C[6], 580, "doc",   "PR en draft", "listo para revisar"]
+};
+const E = {
+  "entrada>adaptador": ["M89 70 V100"],
+  "adaptador>analista": ["M89 154 V190"],
+  "analista>aclarador": ["M150 207 H196"],
+  "aclarador>analista": ["M196 227 H150"],
+  "analista>intent": ["M89 244 V280"],
+  "intent>router": ["M89 334 V370"],
+  "router>spec": ["M150 397 H196", "amplio", 173, 362],
+  "spec>aprob": ["M318 397 H346"],
+  "aprob>plan": ["M468 397 H496"],
+  "plan>impl": ["M618 397 H646"],
+  "impl>ver": ["M768 397 H796"],
+  "ver>rev": ["M918 397 H946"],
+  "router>plan": ["M135 370 V345 H557 V370", "acotado", 400, 339],
+  "router>impl": ["M118 370 V320 H680 V370", "trivial · POC", 400, 314],
+  "rev>impl": ["M1007 370 V345 H755 V370", "cambios", 880, 339, true],
+  "ver>impl": ["M857 424 V450 H745 V424", "reintentar", 800, 465, true],
+  "ver>pub": ["M890 424 V507 H946", "trivial", 917, 500],
+  "rev>pub": ["M1007 424 V480"],
+  "pub>pr": ["M1007 534 V580"],
+  "router>inv": ["M89 424 V507 H196", "investigar", 148, 500],
+  "inv>red": ["M318 507 H496"],
+  "red>inf": ["M557 534 V580"],
+  "impl>red": ["M680 424 V507 H618", "POC", 650, 500],
+  "inf>intent": ["M496 607 H10 V307 H28", "nuevo intent", 250, 600, true]
+};
+const WF = {
+  all: { label: "Grafo completo" },
+  fix: {
+    label: "Fix pequeño", title: "Ticket claro, cambio mínimo",
+    input: "JIRA-482: en el resumen mensual, el total sale con cuatro decimales. Debe mostrar dos.",
+    axes: [["Entrega", "PR"], ["Claridad", "Suficiente"], ["Alcance", "Trivial"], ["Riesgo", "Bajo"]],
+    note: "Sin spec, plan ni revisor. El intent.md ocupa unas pocas líneas.",
+    extra: ["ver>impl"],
+    steps: [
+      ["entrada", "<b>Entrada:</b> llega el ticket."],
+      ["adaptador", "<b>Adaptador:</b> lo pasa al formato común."],
+      ["analista", "<b>Analista:</b> localiza el formateo en el código y no encuentra dudas."],
+      ["intent", "<b>intent.md:</b> problema, resultado y criterio de aceptación."],
+      ["router", "<b>Router:</b> PR y trivial, así que salta directo a implementar."],
+      ["impl", "<b>Implementador:</b> corrige y añade la prueba del caso."],
+      ["ver", "<b>Verificador:</b> ejecuta los tests; si fallan, devuelve el cambio."],
+      ["pub", "<b>Publicador:</b> crea el PR."],
+      ["pr", "<b>PR en draft</b> listo para revisar."]
+    ]
+  },
+  small: {
+    label: "Feature pequeña", title: "Feature clara y acotada",
+    input: "JIRA-497: añadir un filtro por fecha al listado de movimientos.",
+    axes: [["Entrega", "PR"], ["Claridad", "Suficiente"], ["Alcance", "Acotado: una pantalla y un endpoint"], ["Riesgo", "Bajo"]],
+    note: "Sin spec ni aprobación, porque el comportamiento se entiende sin discutirlo y no cambia contratos. Mantiene plan y revisor.",
+    extra: ["ver>impl", "rev>impl"],
+    steps: [
+      ["entrada", "<b>Entrada:</b> llega el ticket."],
+      ["adaptador", "<b>Adaptador:</b> lo pasa al formato común."],
+      ["analista", "<b>Analista:</b> comprueba que el endpoint ya admite filtros y no ve dudas."],
+      ["intent", "<b>intent.md:</b> criterios de aceptación del filtro."],
+      ["router", "<b>Router:</b> PR y acotado, así que pasa por el plan."],
+      ["plan", "<b>Planificador:</b> genera plan.md con los cambios en la pantalla y el endpoint."],
+      ["impl", "<b>Implementador:</b> añade el filtro y sus tests."],
+      ["ver", "<b>Verificador:</b> comprueba los criterios; si fallan, devuelve el cambio."],
+      ["rev", "<b>Revisor:</b> revisa el diff y puede pedir cambios."],
+      ["pub", "<b>Publicador:</b> crea el PR."],
+      ["pr", "<b>PR en draft</b> listo para revisar."]
+    ]
+  },
+  feature: {
+    label: "Feature amplia", title: "Ticket incompleto, feature nueva",
+    input: "JIRA-510: avisar a los usuarios cuando se acerquen a su presupuesto mensual.",
+    axes: [["Entrega", "PR"], ["Claridad", "Bloqueada: ¿qué canal y qué umbral?"], ["Alcance", "Amplio"], ["Riesgo", "Medio"]],
+    note: "Es el recorrido más largo y tiene dos paradas humanas: la respuesta a las dudas y la aprobación de la spec.",
+    extra: ["ver>impl", "rev>impl"],
+    steps: [
+      ["entrada", "<b>Entrada:</b> llega el ticket."],
+      ["adaptador", "<b>Adaptador:</b> lo pasa al formato común."],
+      ["analista", "<b>Analista:</b> detecta dos dudas que cambian lo que se construye."],
+      ["aclarador", "<b>Aclarador:</b> pregunta en Jira y pausa la tarea."],
+      ["analista", "<b>Analista:</b> retoma con las respuestas y reclasifica."],
+      ["intent", "<b>intent.md:</b> incluye criterios y supuestos."],
+      ["router", "<b>Router:</b> PR y amplio, así que pasa por la spec."],
+      ["spec", "<b>Especificador:</b> genera spec.md."],
+      ["aprob", "<b>Aprobación:</b> una persona acepta o corrige la spec."],
+      ["plan", "<b>Planificador:</b> genera plan.md."],
+      ["impl", "<b>Implementador:</b> reparte backend, envío y tests entre workers."],
+      ["ver", "<b>Verificador:</b> comprueba los criterios de aceptación."],
+      ["rev", "<b>Revisor:</b> pasa errores, seguridad y convenciones."],
+      ["pub", "<b>Publicador:</b> crea el PR."],
+      ["pr", "<b>PR en draft</b> con spec, supuestos y evidencias."]
+    ]
+  },
+  research: {
+    label: "Investigación", title: "Petición vaga que no acaba en código",
+    input: "Los listados van lentos, mira a ver qué pasa.",
+    axes: [["Entrega", "Investigación"], ["Claridad", "Con supuestos: se centra en los listados de producción"], ["Alcance", "Acotado"], ["Riesgo", "Bajo"]],
+    note: "No hay PR. El nuevo intent no se ejecuta solo: una persona decide si sigue adelante y entonces entra como tarea nueva.",
+    extra: [],
+    steps: [
+      ["entrada", "<b>Entrada:</b> llega el prompt."],
+      ["adaptador", "<b>Adaptador:</b> lo pasa al formato común."],
+      ["analista", "<b>Analista:</b> ve que falta un diagnóstico, no una orden de cambio."],
+      ["intent", "<b>intent.md:</b> una pregunta a responder y sus supuestos."],
+      ["router", "<b>Router:</b> investigación, así que no pasa por implementar."],
+      ["inv", "<b>Investigador:</b> revisa consultas, trazas y código."],
+      ["red", "<b>Redactor:</b> separa causas probadas de hipótesis."],
+      ["inf", "<b>Informe</b> con hallazgos y opciones."],
+      ["intent", "<b>Nuevo intent.md:</b> propuesta de fix, pendiente de tu decisión."]
+    ]
+  }
+};
+
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("g");
+const el = (tag, attrs, parent, text) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+};
+
+const defs = el("defs", {}, svg);
+[["arr", "mk"], ["arrOn", "mkOn"]].forEach(([id, cls]) => {
+  const m = el("marker", { id, viewBox: "0 0 8 8", refX: 7.5, refY: 4, markerWidth: 8, markerHeight: 8, markerUnits: "userSpaceOnUse", orient: "auto" }, defs);
+  el("path", { d: "M0 0 L8 4 L0 8 Z", class: cls }, m);
+});
+
+const layer = el("g", { class: "layer" }, svg);
+el("rect", { x: 346, y: 16, width: 722, height: 134, rx: 6 }, layer);
+el("text", { x: 364, y: 42, class: "lt" }, layer, "Capa transversal: aplica a todos los nodos");
+[["Permisos mínimos", 364, 72], ["Sandbox", 364, 96], ["Hooks de bloqueo", 364, 120],
+ ["Worktree por tarea", 604, 72], ["Estado persistente", 604, 96], ["Reanudar tras pausa", 604, 120],
+ ["Límite de iteraciones", 830, 72], ["Límite de coste", 830, 96], ["Trazas de cada paso", 830, 120]]
+  .forEach(([t, x, y]) => el("text", { x, y, class: "ls" }, layer, t));
+
+const edges = {}, labels = {}, nodes = {};
+for (const k in E) {
+  const [d, label, lx, ly, back] = E[k];
+  edges[k] = el("path", { d, class: "edge" + (back ? " back" : ""), "marker-end": "url(#arr)" }, svg);
+  if (k === "aclarador>analista") edges[k].classList.add("back");
+  if (label) labels[k] = el("text", { x: lx, y: ly, class: "elabel" }, svg, label);
+}
+for (const k in N) {
+  const [x, y, kind, title, sub] = N[k];
+  const g = el("g", { class: "node " + kind }, svg);
+  const rx = kind === "agent" ? 10 : kind === "human" ? 27 : 0;
+  el("rect", { class: "box", x, y, width: W, height: H, rx }, g);
+  el("text", { class: "ntitle", x: x + W / 2, y: y + 23 }, g, title);
+  el("text", { class: "nsub", x: x + W / 2, y: y + 39 }, g, sub);
+  nodes[k] = g;
+}
+const badges = el("g", {}, svg);
+
+const tabs = document.getElementById("tabs");
+const panel = document.getElementById("panel");
+
+function render(id) {
+  const wf = WF[id];
+  [...tabs.children].forEach(b => b.setAttribute("aria-pressed", b.dataset.id === id));
+  badges.replaceChildren();
+
+  const isAll = id === "all";
+  const onN = new Set(), onE = new Set(), order = {};
+  if (!isAll) {
+    wf.steps.forEach(([n], i) => {
+      onN.add(n);
+      (order[n] = order[n] || []).push(i + 1);
+      if (i) onE.add(wf.steps[i - 1][0] + ">" + n);
+    });
+    wf.extra.forEach(k => onE.add(k));
+  }
+  for (const k in nodes) {
+    nodes[k].classList.toggle("on", onN.has(k));
+    nodes[k].classList.toggle("off", !isAll && !onN.has(k));
+  }
+  for (const k in edges) {
+    const on = onE.has(k);
+    edges[k].classList.toggle("on", on);
+    edges[k].classList.toggle("off", !isAll && !on);
+    edges[k].setAttribute("marker-end", on ? "url(#arrOn)" : "url(#arr)");
+    if (labels[k]) {
+      labels[k].classList.toggle("on", on);
+      labels[k].classList.toggle("off", !isAll && !on);
+    }
+  }
+  for (const k in order) {
+    const [x, y] = N[k], txt = order[k].join(" · ");
+    const w = 10 + txt.length * 6.8;
+    const g = el("g", { class: "badge" }, badges);
+    el("rect", { x: x - 6, y: y - 9, width: w, height: 18, rx: 9 }, g);
+    el("text", { x: x - 6 + w / 2, y: y + 4 }, g, txt);
+  }
+
+  if (isAll) {
+    panel.innerHTML = `
+      <div><h2>Un grafo, varios recorridos</h2>
+      <p>Los nodos y las conexiones permitidas son siempre los mismos. Lo que cambia entre wf es qué conexiones se usan, y eso lo deciden los campos del <code>intent.md</code>.</p></div>
+      <div><div class="tag">Cómo leerlo</div>
+      <ol class="steps">
+        <li><span>Toda entrada recorre la columna izquierda hasta llegar al <b>intent.md</b>.</span></li>
+        <li><span>El <b>router</b> lee ese fichero y elige la ruta, sin usar el modelo.</span></li>
+        <li><span>Las líneas discontinuas son <b>vueltas atrás</b>: preguntar, reintentar, corregir o abrir un nuevo intent.</span></li>
+        <li><span>Elige un wf arriba para ver su recorrido. Los números indican el orden de cada paso.</span></li>
+      </ol></div>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div>
+      <h2>${wf.title}</h2>
+      <div class="tag">Entrada de ejemplo</div>
+      <p class="quote">${wf.input}</p>
+      <div class="tag">Clasificación en intent.md</div>
+      <dl class="axes">${wf.axes.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("")}</dl>
+      <div class="tag">Qué cambia</div>
+      <p>${wf.note}</p>
+    </div>
+    <div>
+      <div class="tag">Recorrido</div>
+      <ol class="steps">${wf.steps.map(s => `<li><span>${s[1]}</span></li>`).join("")}</ol>
+    </div>`;
+}
+
+for (const id in WF) {
+  const b = document.createElement("button");
+  b.className = "tab"; b.type = "button"; b.dataset.id = id; b.textContent = WF[id].label;
+  b.addEventListener("click", () => render(id));
+  tabs.appendChild(b);
+}
+const start = location.hash.slice(1);
+render(WF[start] ? start : "all");
+</script>
